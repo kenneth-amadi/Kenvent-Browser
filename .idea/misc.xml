@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DesignSurface">
+    <option name="filePathToZoomLevelMap">
+      <map>
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable-v24/ic_launcher_foreground.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_close_24.xml" value="0.3072916666666667" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_help_outline_24.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_home_24.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_search_24.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_tab_24.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_baseline_web_24.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/drawable/ic_launcher_background.xml" value="0.29583333333333334" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout-v23/search.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/box_item.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/item_tab.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/main_activity.xml" value="0.2753846153846154" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/main_fragment.xml" value="0.265625" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/search.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/tab_fragment.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/layout/web_fragment.xml" value="0.2796875" />
+        <entry key="..\:/Users/user/AndroidStudioProjects/KIXFOBBY/KenventBrowser/app/src/main/res/menu/menu_web.xml" value="0.2796875" />
+      </map>
+    </option>
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="11" project-jdk-type="JavaSDK">
+    <output url="file://$PROJECT_DIR$/build/classes" />
+  </component>
+  <component name="ProjectType">
+    <option name="id" value="Android" />
+  </component>
+</project>
