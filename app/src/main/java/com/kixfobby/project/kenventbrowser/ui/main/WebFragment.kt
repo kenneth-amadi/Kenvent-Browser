@@ -1,26 +1,32 @@
 package com.kixfobby.project.kenventbrowser.ui.main
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.Context
+import android.content.Context.DOWNLOAD_SERVICE
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Bundle
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.*
 import android.text.TextUtils
+import android.util.Log
 import android.view.*
+import android.view.ContextMenu.ContextMenuInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.webkit.WebChromeClient
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
+import android.webkit.WebView.HitTestResult
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.ActionBar
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.kixfobby.project.kenventbrowser.OnBackPressed
 import com.kixfobby.project.kenventbrowser.Pref
 import com.kixfobby.project.kenventbrowser.R
@@ -33,69 +39,108 @@ open class WebFragment : Fragment(), OnBackPressed {
     private lateinit var onTabClick: OnTabClick
     private lateinit var viewModel: MainViewModel
     private lateinit var binding: WebFragmentBinding
+    private lateinit var myWebView: WebView
+    private lateinit var webSetting: WebSettings
+    private lateinit var mySwipeRefreshLayout: SwipeRefreshLayout
     private lateinit var preview: ByteArray
     private lateinit var favicon: ByteArray
-    private var url: String? = null
-    private var position: Int? = 999
+    private var doubleBackToExitPressedOnce = false
+    private lateinit var url: String
+    private var position: Int = -999
+    private var progress: Progress? = null
+    private var isLoaded: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setHasOptionsMenu(true)
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val root = inflater.inflate(R.layout.web_fragment, container, false)
-        onTabClick = activity as OnTabClick
-
-        url = arguments?.getString("url").toString()
-        position = arguments?.getInt("position")!!
-
-        viewModel = ViewModelProvider(this)[MainViewModel::class.java] // TODO: Use the ViewModel
-        binding = WebFragmentBinding.bind(root)
-        binding.presenter = viewModel
-        this.lifecycle.addObserver(viewModel)
-
-        return root
+    @RequiresApi(Build.VERSION_CODES.M)
+    override fun onResume() {
+        if (isOnline()/* && !isLoaded*/) renderWebPage(url)
+        else showToast("No internet")
+        super.onResume()
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View {
+        inflater.inflate(R.layout.web_fragment, container, false).let {
+            onTabClick = activity as OnTabClick
+
+            url = requireArguments().getString("url").toString()
+            position = requireArguments().getInt("position")
+
+            viewModel =
+                ViewModelProvider(this)[MainViewModel::class.java] // TODO: Use the ViewModel
+            binding = WebFragmentBinding.bind(it)
+            binding.presenter = viewModel
+            this.lifecycle.addObserver(viewModel)
+
+            return it
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val actionBar: ActionBar = (activity as AppCompatActivity?)!!.supportActionBar!!
-        actionBar.setDisplayShowCustomEnabled(true)
+        myWebView = binding.webView
+        webSetting = myWebView.settings
+        mySwipeRefreshLayout = binding.swipeRefresh
 
-        val inflator =
-            requireActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        val v: View = inflator.inflate(R.layout.search, null)
-        actionBar.customView = v
+        getString(R.string.app_name).let(::println)
 
-        searchEditBar = v.findViewById(R.id.search_edit_bar)
-        searchEditBar.setOnEditorActionListener(TextView.OnEditorActionListener { v, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                searchEditBar.clearFocus();
-                var inp: InputMethodManager =
-                    requireActivity().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                inp.hideSoftInputFromWindow(searchEditBar.windowToken, 0)
-                val lastPosition = TabFragment().retrieveTabs(requireContext()).lastIndex
-                val url = searchEditBar.text.toString()
-                onTabClick.loadTab(url, Pref(requireContext()).get("position", position!!))
-                return@OnEditorActionListener true
+        with(requireActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater) {
+            inflate(R.layout.search, null)?.let {
+                ((activity as AppCompatActivity?)?.supportActionBar)?.apply {
+                    setDisplayShowCustomEnabled(true)
+                    customView = it
+                }
+                searchEditBar = it.findViewById(R.id.search_edit_bar)
+                with(searchEditBar) {
+                    setText(url)
+                    setOnEditorActionListener(TextView.OnEditorActionListener { v, actionId, event ->
+                        if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                            clearFocus()
+                            val inp: InputMethodManager =
+                                requireActivity().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                            inp.hideSoftInputFromWindow(windowToken, 0)
+
+                            val url = text.toString()
+                            onTabClick.loadTab(
+                                url,
+                                Pref(requireContext()).get("position", position)
+                            )
+                            return@OnEditorActionListener true
+                        }
+                        false
+                    })
+                }
+
             }
-            false
-        })
+        }
 
-        renderPrivacyWebPage(url)
-        // Makes Progress bar Visible
-        /*requireActivity().window.setFeatureInt(
-            Window.FEATURE_PROGRESS,
-            Window.PROGRESS_VISIBILITY_ON
-        );*/
+        renderWebPage(url)
+
+        mySwipeRefreshLayout.setOnRefreshListener {
+            Log.i("on refresh", "onRefresh called from SwipeRefreshLayout")
+            myWebView.reload()
+            webSetting.cacheMode = WebSettings.LOAD_DEFAULT
+            setProgressDialogVisibility(false)
+        }
+
+        if (!isOnline()) {
+            showToast("No internet")
+            //infoTV.text = getString(R.string.no_internet)
+            //showNoNetSnackBar()
+            return
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    protected fun renderPrivacyWebPage(url: String?) {
-        val myWebView = binding.webView
+    protected fun renderWebPage(url: String?) {
+        //infoTV.text = ""
+        registerForContextMenu(myWebView)
+
         myWebView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                 view.loadUrl(url)
@@ -103,16 +148,31 @@ open class WebFragment : Fragment(), OnBackPressed {
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                setProgressDialogVisibility(true)
                 super.onPageStarted(view, url, favicon)
-                Toast.makeText(requireContext(), "Started!", Toast.LENGTH_SHORT).show()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                //this@WebFragment.preview = getPreviewWebview(view!!)
-                Toast.makeText(requireContext(), "Finished!", Toast.LENGTH_SHORT).show()
+                isLoaded = true
+                setProgressDialogVisibility(false)
+                mySwipeRefreshLayout.isRefreshing = false
+            }
+
+            @RequiresApi(Build.VERSION_CODES.M)
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError
+            ) {
+                super.onReceivedError(view, request, error)
+                isLoaded = false
+                //showToast(error.description as String)
+                setProgressDialogVisibility(false)
+
             }
         }
+
         myWebView.webChromeClient = object : WebChromeClient() {
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 super.onReceivedTitle(view, title)
@@ -124,24 +184,26 @@ open class WebFragment : Fragment(), OnBackPressed {
 
             override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
                 super.onReceivedIcon(view, icon)
-                Pref(requireContext()).put("position", position!!)
-                //Pref(requireContext()).put("title", title)
-
-                val title = Pref(requireContext()).get("title", url)
-
-                this@WebFragment.preview = getPreview(view!!)
-                this@WebFragment.favicon = getFavicon(icon)
-                val tabs = TabFragment().retrieveTabs(requireContext())
-                tabs.set(position!!, Tabs(title, view.url, preview, favicon, position))
-                TabFragment().setSavedTabs(requireContext(), tabs)
-
+                position.let {
+                    Pref(requireContext()).put("position", it)
+                    //Pref(requireContext()).put("title", title)
+                    val title = Pref(requireContext()).get("title", url)
+                    try {
+                        this@WebFragment.preview = getPreview(view!!)
+                        this@WebFragment.favicon = getFavicon(icon)
+                        val tabs = TabFragment().retrieveTabs(requireContext())
+                        tabs.set(it, Tabs(title, view.url, preview, favicon, it))
+                        TabFragment().setSavedTabs(requireContext(), tabs)
+                    } catch (e: Exception) {
+                        val tabs = TabFragment().retrieveTabs(requireContext())
+                        tabs.set(it, Tabs(title, view?.url, null, null, it))
+                        TabFragment().setSavedTabs(requireContext(), tabs)
+                    }
+                }
             }
 
             override fun onProgressChanged(view: WebView, newProgress: Int) {}
         }
-        val webSetting: WebSettings = myWebView.settings
-        webSetting.javaScriptEnabled = true
-        myWebView.webViewClient = WebViewClient()
         myWebView.canGoBack()
         myWebView.setOnKeyListener(View.OnKeyListener { v, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_BACK && event.action == MotionEvent.ACTION_UP
@@ -149,42 +211,178 @@ open class WebFragment : Fragment(), OnBackPressed {
             ) {
                 myWebView.goBack()
                 return@OnKeyListener true
+            } else {
+                showToastToExit()
             }
             false
         })
-
+        myWebView.setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            DownloadManager.Request(Uri.parse(url)).run {
+                CookieManager.getInstance().getCookie(url).let { addRequestHeader("cookie", it) }
+                addRequestHeader("User-Agent", userAgent)
+                setDescription("Downloading file...")
+                setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType))
+                allowScanningByMediaScanner()
+                setMimeType(mimeType)
+                setAllowedOverMetered(true)
+                setAllowedOverRoaming(true)
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    URLUtil.guessFileName(url, contentDisposition, mimeType)
+                )
+                val dm = requireActivity().getSystemService(DOWNLOAD_SERVICE) as DownloadManager?
+                dm!!.enqueue(this)
+                showToast("Downloading File")
+            }
+        }
+        with(webSetting) {
+            javaScriptEnabled = true
+            allowContentAccess = true
+            domStorageEnabled = true
+            useWideViewPort = true
+            builtInZoomControls = true
+            displayZoomControls = false
+        }
         myWebView.loadUrl(url!!)
-        myWebView.settings.javaScriptEnabled = true
-        myWebView.settings.allowContentAccess = true
-        myWebView.settings.domStorageEnabled = true
-        myWebView.settings.useWideViewPort = true
-
     }
 
     private fun getPreview(view: WebView): ByteArray {
-        val bitmap = Bitmap.createBitmap(view.width, 1500, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        view.draw(canvas)
+        Bitmap.createBitmap(view.width, 1500, Bitmap.Config.ARGB_8888).let {
+            val canvas = Canvas(it)
+            view.draw(canvas)
 
-        val byteStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 0, byteStream)
-        return byteStream.toByteArray()
+            ByteArrayOutputStream().run {
+                it.compress(Bitmap.CompressFormat.PNG, 0, this)
+                return toByteArray()
+            }
+        }
     }
 
     fun getFavicon(icon: Bitmap?): ByteArray {
-        val byteStream = ByteArrayOutputStream()
-        icon?.compress(Bitmap.CompressFormat.PNG, 0, byteStream)
-        return byteStream.toByteArray()
+        ByteArrayOutputStream().run {
+            icon?.compress(Bitmap.CompressFormat.PNG, 0, this)
+            return this.toByteArray()
+        }
     }
 
     override fun onBackPressed(): Boolean {
         return run {
-            val transaction = activity?.supportFragmentManager?.beginTransaction()
-            transaction?.replace(R.id.container, MainFragment())
-            transaction?.disallowAddToBackStack()
-            transaction?.commit()
-            true
+            requireActivity().supportFragmentManager.beginTransaction().let {
+                it.replace(R.id.container, MainFragment())
+                it.disallowAddToBackStack()
+                it.commit()
+                true
+            }
         }
+    }
+
+    private fun showToastToExit() {
+        when {
+            doubleBackToExitPressedOnce -> {
+                onBackPressed()
+            }
+            else -> {
+                doubleBackToExitPressedOnce = true
+                showToast("Press back again to exit")
+                Handler(Looper.myLooper()!!).postDelayed(
+                    { doubleBackToExitPressedOnce = false },
+                    2000
+                )
+            }
+        }
+    }
+
+    private fun setProgressDialogVisibility(visible: Boolean) {
+        if (visible) progress = Progress(requireContext(), "Please wait", cancelable = true)
+        progress?.apply { if (visible) show() else dismiss() }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun isOnline(): Boolean {
+        val connectivityManager =
+            requireActivity().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities =
+            connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+        if (capabilities != null) {
+            when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                    Log.i("Internet", "NetworkCapabilities.TRANSPORT_CELLULAR")
+                    return true
+                }
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+                    Log.i("Internet", "NetworkCapabilities.TRANSPORT_WIFI")
+                    return true
+                }
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> {
+                    Log.i("Internet", "NetworkCapabilities.TRANSPORT_ETHERNET")
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+    }
+
+    /*private fun showNoNetSnackBar() {
+        val snack = Snackbar.make(requireView(), "No internet", Snackbar.LENGTH_INDEFINITE)
+        snack.setAction("Settings") {
+            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+        }
+        snack.show()
+    }*/
+
+
+    override fun onCreateContextMenu(
+        contextMenu: ContextMenu,
+        view: View,
+        contextMenuInfo: ContextMenuInfo?
+    ) {
+        super.onCreateContextMenu(contextMenu, view, contextMenuInfo)
+        val webViewHitTestResult: HitTestResult = myWebView.hitTestResult
+        if (webViewHitTestResult.type == HitTestResult.IMAGE_TYPE ||
+            webViewHitTestResult.type == HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+        ) {
+            contextMenu.setHeaderTitle("Download Image")
+            contextMenu.add(0, 1, 0, "Save Image")
+
+        }
+    }
+
+    override fun onContextItemSelected(item: MenuItem): Boolean {
+        super.onContextItemSelected(item)
+        val webViewHitTestResult: HitTestResult = myWebView.hitTestResult
+        item.setOnMenuItemClickListener {
+            when (item.itemId) {
+                1 -> {
+                    val downloadImageURL = webViewHitTestResult.extra
+                    if (URLUtil.isValidUrl(downloadImageURL)) {
+                        val request = DownloadManager.Request(Uri.parse(downloadImageURL))
+                        request.allowScanningByMediaScanner()
+                        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        request.setDestinationInExternalPublicDir(
+                            Environment.DIRECTORY_DOWNLOADS,
+                            URLUtil.guessFileName(url, null, null)
+                        )
+                        request.setAllowedOverMetered(true)
+                        val downloadManager =
+                            requireActivity().getSystemService(DOWNLOAD_SERVICE) as DownloadManager?
+                        downloadManager!!.enqueue(request)
+                        showToast("Image Downloading...")
+                    } else {
+                        showToast("Sorry.. Something Went Wrong.")
+                    }
+                    false
+                }
+                else -> {
+                    false
+                }
+            }
+        }
+        return false
     }
 
 

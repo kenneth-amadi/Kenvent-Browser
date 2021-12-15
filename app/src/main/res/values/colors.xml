@@ -6,7 +6,12 @@
     <color name="colorControlNormal">#D5E1B11F</color>
     <color name="colorControlActivated">@color/colorAccent</color>
 
+    <color name="colorBackground">#E3DFEA</color>
+    <color name="windowBackground">#C0C3C6</color>
+    <color name="darkBackground">#424242</color>
+
     <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_400">#FF8800EE</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_200">#FF03DAC5</color>

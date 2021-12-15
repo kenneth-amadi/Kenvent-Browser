@@ -7,6 +7,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.ActionBar
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -29,6 +31,7 @@ class TabFragment : Fragment(), OnBackPressed {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setHasOptionsMenu(false)
     }
 
     override fun onCreateView(
@@ -45,47 +48,41 @@ class TabFragment : Fragment(), OnBackPressed {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val recyclerView = binding.recyclerView
-        recyclerView.layoutManager = GridLayoutManager(context, 2)
-        recyclerView.setHasFixedSize(false)
-        recyclerView.setItemViewCacheSize(50)
-        recyclerView.isNestedScrollingEnabled = false
+        val actionBar: ActionBar = (activity as AppCompatActivity?)!!.supportActionBar!!
+        actionBar.setDisplayShowCustomEnabled(false)
 
-        mAdapter = BaseGridAdapter(requireContext(), retrieveTabs(requireContext()))
-        recyclerView.adapter = mAdapter
+        binding.recyclerView.run {
+            layoutManager = GridLayoutManager(context, 2)
+            setHasFixedSize(false)
+            setItemViewCacheSize(50)
+            isNestedScrollingEnabled = false
 
-        mAdapter.setOnItemClickListener(object : BaseGridAdapter.OnItemClickListener {
-            override fun onItemClick(view: View?, obj: Tabs, position: Int) {
-                onTabClick.loadTab(obj.url!!, position)
-                mAdapter.notifyItemChanged(position)
-            }
-        })
+            mAdapter = BaseGridAdapter(requireContext(), retrieveTabs(requireContext()))
+            adapter = mAdapter
+
+            mAdapter.setOnItemClickListener(object : BaseGridAdapter.OnItemClickListener {
+                override fun onItemClick(view: View?, obj: Tabs, position: Int) {
+                    onTabClick.loadTab(obj.url!!, position)
+                }
+            })
+        }
 
         binding.executePendingBindings()
     }
 
     override fun onBackPressed(): Boolean {
         return run {
-            val transaction = activity?.supportFragmentManager?.beginTransaction()
-            transaction?.replace(R.id.container, MainFragment())
-            transaction?.disallowAddToBackStack()
-            transaction?.commit()
-            true
+            requireActivity().supportFragmentManager.beginTransaction().let {
+                it.replace(R.id.container, MainFragment())
+                it.disallowAddToBackStack()
+                it.commit()
+                true
+            }
         }
     }
 
     fun saveTab(c: Context, p: Tabs) {
         val tabs = retrieveTabs(c)
-        /*for (per in tabs) {
-            if (per == p) {
-                return
-            }
-        }*/
-        /*try {
-            tabs.set(p.position!!, p)
-        } catch (e: IndexOutOfBoundsException) {
-            tabs.set(p.position!! - 1, p)
-        }*/
         tabs.add(p)
         Log.i("TAB MANAGER", "Added: " + p.url)
         setSavedTabs(c, tabs)
@@ -93,7 +90,6 @@ class TabFragment : Fragment(), OnBackPressed {
 
     fun replaceTab(c: Context, p: Tabs) {
         //val tabs = retrieveTabs(c)
-
         //tabs.set(p.position!!, Tabs(p.title, p.url, p.preview, p.favicon, p.position))
         //setSavedTabs(c, tabs)
         Toast.makeText(requireContext(), "Replace!", Toast.LENGTH_SHORT).show()

@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity(), OnTabClick {
                 .replace(R.id.container, MainFragment())
                 .commitNow()
         }
+
     }
 
     override fun loadTab(url: String, position: Int) {

@@ -2,7 +2,11 @@ package com.kixfobby.project.kenventbrowser.ui.main
 
 import android.os.Bundle
 import android.view.*
+import android.view.inputmethod.EditorInfo
+import android.widget.TextView.OnEditorActionListener
 import android.widget.Toast
+import androidx.appcompat.app.ActionBar
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -10,10 +14,6 @@ import androidx.lifecycle.ViewModelProvider
 import com.kixfobby.project.kenventbrowser.OnBackPressed
 import com.kixfobby.project.kenventbrowser.R
 import com.kixfobby.project.kenventbrowser.databinding.MainFragmentBinding
-import android.view.inputmethod.EditorInfo
-
-import android.widget.TextView
-import android.widget.TextView.OnEditorActionListener
 
 
 class MainFragment : Fragment(), OnBackPressed {
@@ -41,6 +41,9 @@ class MainFragment : Fragment(), OnBackPressed {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val actionBar: ActionBar = (activity as AppCompatActivity?)!!.supportActionBar!!
+        actionBar.setDisplayShowCustomEnabled(false)
+
         binding.searchGoBtn.setOnClickListener {
             val lastPosition = TabFragment().retrieveTabs(requireContext()).lastIndex
             val url = binding.searchEdit.text.toString()
@@ -52,7 +55,10 @@ class MainFragment : Fragment(), OnBackPressed {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 val lastPosition = TabFragment().retrieveTabs(requireContext()).lastIndex
                 val url = binding.searchEdit.text.toString()
-                TabFragment().saveTab(requireContext(), Tabs(null, url, null, null, lastPosition + 1))
+                TabFragment().saveTab(
+                    requireContext(),
+                    Tabs(null, url, null, null, lastPosition + 1)
+                )
                 onTabClick.loadTab(url, lastPosition + 1)
                 return@OnEditorActionListener true
             }
@@ -96,11 +102,14 @@ class MainFragment : Fragment(), OnBackPressed {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             0 -> {
-                val transaction = activity?.supportFragmentManager?.beginTransaction()
-                transaction?.replace(R.id.container, TabFragment())
-                //transaction?.disallowAddToBackStack()
-                transaction?.commit()
-                return true
+                return run {
+                    requireActivity().supportFragmentManager.beginTransaction().let {
+                        it.replace(R.id.container, TabFragment())
+                        it.disallowAddToBackStack()
+                        it.commit()
+                        true
+                    }
+                }
             }
             1 -> {
 

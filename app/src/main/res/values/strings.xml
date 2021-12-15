@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Kenvent Browser</string>
+    <string name="search">SEARCH</string>
+    <string name="welcome_to_kenvent_browser">Welcome to Kenvent Browser</string>
 </resources>
